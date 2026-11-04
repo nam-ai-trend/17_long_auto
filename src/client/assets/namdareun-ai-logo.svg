@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="250 250 680 700" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="title">
+  <title id="title">남다른AI 로고</title>
+  <g fill="none" stroke="#343434" stroke-width="34" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M318 723V363C318 312 359 272 410 272C438 272 459 286 480 309L739 596C746 604 754 608 754 590V445"/>
+    <path d="M435 748V584L748 891C780 923 815 936 841 923C858 914 865 893 865 850V369"/>
+    <path d="M435 468L740 767"/>
+  </g>
+  <path d="M318 723V824" fill="none" stroke="#ff3158" stroke-width="34" stroke-linecap="round"/>
+  <g fill="#fbfaf7" stroke="#343434" stroke-width="31">
+    <circle cx="435" cy="429" r="35"/>
+    <circle cx="740" cy="398" r="35"/>
+    <circle cx="740" cy="763" r="35"/>
+    <circle cx="435" cy="797" r="35"/>
+    <circle cx="856" cy="319" r="35"/>
+  </g>
+  <circle cx="318" cy="875" r="36" fill="#fbfaf7" stroke="#ff3158" stroke-width="31"/>
+</svg>

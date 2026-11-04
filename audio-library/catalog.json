@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "allowedSources": [
+    {
+      "name": "YouTube Audio Library",
+      "url": "https://www.youtube.com/audiolibrary",
+      "licensePolicy": "attribution-not-required-only"
+    },
+    {
+      "name": "Kenney",
+      "url": "https://kenney.nl/assets?q=audio",
+      "licensePolicy": "CC0-only"
+    },
+    {
+      "name": "Freesound",
+      "url": "https://freesound.org/search/?f=license:%22creative+commons+0%22",
+      "licensePolicy": "CC0-only"
+    }
+  ],
+  "tracks": []
+}
