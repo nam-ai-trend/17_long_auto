@@ -103,6 +103,14 @@ export const RenderStudio = ({project, api}: Props) => {
     setJobs((items) => items.map((item) => (item.id === next.id ? next : item)));
   };
 
+  const failedJobs = jobs.filter((job) => job.status === 'failed');
+
+  const retryAllFailed = async () => {
+    for (const job of failedJobs) {
+      await retry(job);
+    }
+  };
+
   const currentRenderState = activeRenderingMode
     ? (activeRenderingMode === 'full' ? fullState : previewState)
     : (activeViewMode === 'full' ? fullState : previewState);
@@ -366,14 +374,15 @@ export const RenderStudio = ({project, api}: Props) => {
             </small>
           </div>
           <div className="job-actions">
-            {jobs
-              .filter((job) => job.status === 'failed')
-              .map((job) => (
-                <button type="button" key={job.id} onClick={() => retry(job)}>
+            {failedJobs.length > 0 && (
+              <>
+                <span className="job-failed-chip">실패 {failedJobs.length}건</span>
+                <button type="button" onClick={retryAllFailed}>
                   <ArrowClockwise size={15} />
-                  재시도
+                  {failedJobs.length > 1 ? `전체 재시도 (${failedJobs.length}건)` : '재시도'}
                 </button>
-              ))}
+              </>
+            )}
           </div>
         </div>
       </div>

@@ -1605,12 +1605,12 @@ textarea:focus {
   box-shadow: 0 20px 50px rgba(43, 39, 33, .16);
 }
 
-.stage-footer strong,
-.stage-footer span {
+.stage-footer>div>strong,
+.stage-footer>div>span {
   display: block;
 }
 
-.stage-footer strong {
+.stage-footer>div>strong {
   font-size: 13px;
 }
 
@@ -1638,49 +1638,65 @@ textarea:focus {
 }
 
 .stage-footer-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  height: 48px;
-  min-height: 48px;
-  padding: 0 24px;
-  border-radius: 999px;
-  font-family: inherit;
-  font-size: 14px;
-  font-weight: 700;
-  white-space: nowrap;
-  cursor: pointer;
-  border: none;
-  box-shadow: none;
-  transition: transform .2s ease, background-color .2s ease, opacity .2s ease;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  height: 48px !important;
+  min-height: 48px !important;
+  padding: 0 24px !important;
+  border-radius: 999px !important;
+  font-family: inherit !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  white-space: nowrap !important;
+  cursor: pointer !important;
+  border: none !important;
+  box-shadow: none !important;
+  line-height: 1 !important;
+  box-sizing: border-box !important;
+  transition: transform .2s ease, background-color .2s ease, opacity .2s ease !important;
+}
+
+.stage-footer-btn span {
+  display: inline !important;
+  color: inherit !important;
+  font-size: inherit !important;
+  font-weight: inherit !important;
+  margin: 0 !important;
+  line-height: 1 !important;
+}
+
+.stage-footer-btn svg {
+  flex-shrink: 0 !important;
 }
 
 .stage-footer-btn-nav {
-  background: rgba(255, 255, 255, 0.16);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.16) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.32) !important;
 }
 
 .stage-footer-btn-nav:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.26);
-  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.26) !important;
+  transform: translateY(-1px) !important;
 }
 
 .stage-footer-btn-primary {
-  background: #fff8ef;
-  color: #2b2721;
+  background: #fff8ef !important;
+  color: #2b2721 !important;
+  border: none !important;
 }
 
 .stage-footer-btn-primary:hover:not(:disabled) {
-  background: #ffffff;
-  transform: translateY(-1px);
+  background: #ffffff !important;
+  transform: translateY(-1px) !important;
 }
 
 .stage-footer-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-  transform: none;
+  opacity: 0.45 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
 }
 
 .production-workspace {
@@ -2640,9 +2656,41 @@ textarea:focus {
   font-size: 9px;
 }
 
+.job-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.job-failed-chip {
+  padding: 5px 10px;
+  border-radius: 999px;
+  color: #dc2626;
+  background: #fee2e2;
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .job-actions button {
-  min-height: 34px;
-  font-size: 9px;
+  min-height: 36px;
+  padding: 0 16px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #25211b;
+  color: #fff;
+  border: 0;
+  cursor: pointer;
+  transition: transform .2s ease, background-color .2s ease;
+}
+
+.job-actions button:hover {
+  background: #38322a;
+  transform: translateY(-1px);
 }
 
 .render-control-card {
