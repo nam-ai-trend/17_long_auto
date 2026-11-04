@@ -133,7 +133,9 @@ export const ScriptStudio = ({project, api, onProject, onNavigate}: Props) => {
     setBusy(true);
     setError('');
     try {
-      onProject(await api.buildMediaPlan(project.id));
+      const updated = await api.buildMediaPlan(project.id);
+      onProject(updated);
+      onNavigate?.('production');
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '시각 설계를 만들지 못했습니다.');
     } finally {
