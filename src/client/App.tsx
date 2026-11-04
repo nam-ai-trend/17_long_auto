@@ -36,10 +36,16 @@ export const App = ({api = defaultApi}: {api?: YadamApi}) => {
     }
   };
 
-  const handleOpenProject = (project: Project) => {
+  const handleOpenProject = async (project: Project) => {
     setActive(project);
     setCreating(false);
     setViewStage(project.stage);
+    try {
+      const latest = await api.getProject(project.id);
+      setActive(latest);
+      setViewStage(latest.stage);
+      setProjects((items) => [latest, ...items.filter((item) => item.id !== latest.id)]);
+    } catch {}
   };
 
   const handleNavigate = (stage: ProjectStage) => {
@@ -87,7 +93,16 @@ export const App = ({api = defaultApi}: {api?: YadamApi}) => {
   return (
     <div className="app-shell">
       <header className="floating-nav">
-        <button className="brand" type="button" onClick={() => {setActive(null); setCreating(false); setViewStage(null);}}>
+        <button
+          className="brand"
+          type="button"
+          onClick={() => {
+            setActive(null);
+            setCreating(false);
+            setViewStage(null);
+            void api.listProjects().then(setProjects);
+          }}
+        >
           <span className="brand-mark"><img src={namdareunAiLogo} alt="남다른AI 로고" /></span>
           <span><strong>남다른AI</strong><small>롱폼 제작 프로그램</small></span>
         </button>
