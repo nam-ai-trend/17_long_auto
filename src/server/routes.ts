@@ -403,11 +403,33 @@ export const createRoutes = (
       storyDevelopment: project.storyDevelopment,
       sceneData,
     });
-    const visualPromptPackages = buildVisualPromptPackages({
+    const rawPackages = buildVisualPromptPackages({
       visualBible,
       sceneData,
       mediaSegments: plannedSegments,
       cues: project.cues,
+    });
+    const visualDir = join(assetRoot, project.id, 'visuals');
+    const existingMap = new Map(project.visualPromptPackages.map((p) => [p.id, p]));
+    const visualPromptPackages = rawPackages.map((pkg) => {
+      const existing = existingMap.get(pkg.id);
+      const hasDiskFile =
+        existsSync(join(visualDir, `${pkg.id}.png`)) ||
+        existsSync(join(visualDir, `${pkg.id}.mp4`)) ||
+        existsSync(join(visualDir, `${pkg.id}.jpg`)) ||
+        existsSync(join(visualDir, `${pkg.id}.webp`));
+
+      if (existing?.status === 'ready' && existing.assetUrl) {
+        return {...pkg, status: 'ready' as const, assetUrl: existing.assetUrl, model: existing.model ?? pkg.model};
+      }
+      if (hasDiskFile) {
+        return {
+          ...pkg,
+          status: 'ready' as const,
+          assetUrl: `/api/projects/${project.id}/visual-prompts/${pkg.id}/media`,
+        };
+      }
+      return pkg;
     });
     const referencesBySegment = new Map(
       visualPromptPackages
