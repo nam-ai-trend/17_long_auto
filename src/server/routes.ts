@@ -503,9 +503,12 @@ export const createRoutes = (
 
   router.post('/projects/:id/visual-prompts/batch-models', (request, response) => {
     requireProject(request.params.id);
-    const {model, ids, categoryModels} = request.body ?? {};
+    const {model, imageModel, videoModel, targetType, ids, categoryModels} = request.body ?? {};
     const updated = visualRunner.updateBatchModels(request.params.id, {
       model,
+      imageModel,
+      videoModel,
+      targetType,
       ids,
       categoryModels,
     });

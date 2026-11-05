@@ -59,6 +59,9 @@ export type YadamApi = {
     projectId: string,
     options: {
       model?: string;
+      imageModel?: string;
+      videoModel?: string;
+      targetType?: 'all' | 'image' | 'video';
       ids?: string[];
       categoryModels?: {
         character?: string;

@@ -146,7 +146,7 @@ const mockProject: Project = {
 };
 
 describe('VisualStudio batch model change', () => {
-  it('모델 일괄 변경 드롭다운에서 선택 후 전체 일괄 적용을 실행한다', async () => {
+  it('이미지 모델과 영상 모델을 각각 선택하여 일괄 적용할 수 있다', async () => {
     const user = userEvent.setup();
     const onProject = vi.fn();
     const updateVisualBatchModels = vi.fn().mockImplementation(async (_id, options) => {
@@ -154,7 +154,7 @@ describe('VisualStudio batch model change', () => {
         ...mockProject,
         visualPromptPackages: mockProject.visualPromptPackages.map((pkg) => ({
           ...pkg,
-          model: options.model ?? pkg.model,
+          model: (pkg.kind === 'intro-video' ? options.videoModel : options.imageModel) ?? pkg.model,
         })),
       };
     });
@@ -173,21 +173,39 @@ describe('VisualStudio batch model change', () => {
     render(<VisualStudio project={mockProject} api={api} onProject={onProject} />);
 
     // 일괄 변경 툴바 요소 확인
-    expect(screen.getByText('모델 일괄 변경')).toBeInTheDocument();
-    const select = screen.getByLabelText('일괄 변경할 AI 모델 선택');
-    expect(select).toBeInTheDocument();
+    expect(screen.getByText(/모델 일괄 변경/)).toBeInTheDocument();
+    const imageSelect = screen.getByLabelText('일괄 변경할 이미지 모델 선택');
+    const videoSelect = screen.getByLabelText('일괄 변경할 영상 모델 선택');
+    expect(imageSelect).toBeInTheDocument();
+    expect(videoSelect).toBeInTheDocument();
 
-    // 모델 변경 선택
-    await user.selectOptions(select, 'nano_banana_flash');
-
-    // 전체 일괄 변경 버튼 클릭
-    const applyAllBtn = screen.getByRole('button', {name: /전체 \(3개\) 일괄 변경/});
-    expect(applyAllBtn).not.toBeDisabled();
-    await user.click(applyAllBtn);
+    // 이미지 모델 선택 후 적용
+    await user.selectOptions(imageSelect, 'nano_banana_flash');
+    const applyImageBtn = screen.getByRole('button', {name: /이미지 전체 \(2개\) 적용/});
+    await user.click(applyImageBtn);
 
     expect(updateVisualBatchModels).toHaveBeenCalledWith('project-visual-test', {
-      model: 'nano_banana_flash',
+      imageModel: 'nano_banana_flash',
       ids: undefined,
+    });
+
+    // 영상 모델 선택 후 적용
+    await user.selectOptions(videoSelect, 'seedance_2_5');
+    const applyVideoBtn = screen.getByRole('button', {name: /영상 전체 \(1개\) 적용/});
+    await user.click(applyVideoBtn);
+
+    expect(updateVisualBatchModels).toHaveBeenCalledWith('project-visual-test', {
+      videoModel: 'seedance_2_5',
+      ids: undefined,
+    });
+
+    // 한 번에 동시 적용 버튼 클릭
+    const applyCombinedBtn = screen.getByRole('button', {name: /한 번에 동시 적용/});
+    await user.click(applyCombinedBtn);
+
+    expect(updateVisualBatchModels).toHaveBeenCalledWith('project-visual-test', {
+      imageModel: 'nano_banana_flash',
+      videoModel: 'seedance_2_5',
     });
     expect(onProject).toHaveBeenCalled();
   });

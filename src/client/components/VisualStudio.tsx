@@ -67,6 +67,8 @@ export const VisualStudio = ({project, api, onProject, onNavigate}: Props) => {
   const [filterTab, setFilterTab] = useState<string>('all');
   const [previewMedia, setPreviewMedia] = useState<{url: string; isVideo: boolean} | null>(null);
   const [batchTargetModel, setBatchTargetModel] = useState<string>('');
+  const [batchImageModel, setBatchImageModel] = useState<string>('seedream_5_0_flash');
+  const [batchVideoModel, setBatchVideoModel] = useState<string>('seedance_2_0_fast');
   const [isUpdatingBatchModels, setIsUpdatingBatchModels] = useState(false);
   const [batchSuccessMessage, setBatchSuccessMessage] = useState<string | null>(null);
 
@@ -78,6 +80,30 @@ export const VisualStudio = ({project, api, onProject, onNavigate}: Props) => {
     (item) => item.kind === 'intro-keyframe' || item.kind === 'intro-video',
   );
   const sceneRequests = project.visualPromptPackages.filter((item) => !item.kind.endsWith('reference'));
+  const imagePackages = project.visualPromptPackages.filter((item) => item.kind !== 'intro-video');
+  const videoPackages = project.visualPromptPackages.filter((item) => item.kind === 'intro-video');
+
+  // 필터링된 패키지 목록
+  const filteredPackages = project.visualPromptPackages.filter((pkg) => {
+    if (filterTab === 'all') return true;
+    if (filterTab === 'reference') return pkg.kind.endsWith('reference');
+    if (filterTab === 'intro') return pkg.kind === 'intro-keyframe' || pkg.kind === 'intro-video';
+    // 씬 필터 (예: 'scene-0', 'scene-1')
+    if (filterTab.startsWith('scene-')) {
+      if (pkg.kind === 'intro-keyframe' || pkg.kind === 'intro-video') return false;
+      const sceneIndex = Number(filterTab.replace('scene-', ''));
+      const scene = project.scenes[sceneIndex];
+      if (!scene) return true;
+      return (
+        pkg.sceneDataId?.includes(scene.id) ||
+        pkg.mediaSegmentId?.includes(scene.id) ||
+        pkg.prompt.includes(scene.title)
+      );
+    }
+    return true;
+  });
+  const filteredImagePackages = filteredPackages.filter((item) => item.kind !== 'intro-video');
+  const filteredVideoPackages = filteredPackages.filter((item) => item.kind === 'intro-video');
 
   const ungeneratedPackages = project.visualPromptPackages.filter(
     (item) => !(item.status === 'ready' && item.assetUrl),
@@ -188,6 +214,97 @@ export const VisualStudio = ({project, api, onProject, onNavigate}: Props) => {
     }
   };
 
+  const handleApplyImageModel = async (scope: 'all' | 'filtered' = 'all') => {
+    if (!batchImageModel) return;
+    setActionError('');
+    setIsUpdatingBatchModels(true);
+    try {
+      const targets = scope === 'filtered' ? filteredImagePackages : imagePackages;
+      const targetIds = targets.map((p) => p.id);
+      const updated = await api.updateVisualBatchModels(project.id, {
+        imageModel: batchImageModel,
+        ids: scope === 'filtered' ? targetIds : undefined,
+      });
+      onProject(updated);
+
+      const newModelMap = {...modelMap};
+      for (const pkg of updated.visualPromptPackages) {
+        if (!targetIds || targetIds.includes(pkg.id)) {
+          newModelMap[pkg.id] = pkg.model;
+        }
+      }
+      setModelMap(newModelMap);
+
+      const modelInfo = RECOMMENDED_VISUAL_MODELS.find((m) => m.id === batchImageModel);
+      const modelName = modelInfo ? modelInfo.label : batchImageModel;
+      setBatchSuccessMessage(`✓ ${targets.length}개 이미지/삽화 항목의 모델이 '${modelName}'(으)로 변경되었습니다.`);
+      setTimeout(() => setBatchSuccessMessage(null), 4000);
+    } catch (caught) {
+      setActionError(caught instanceof Error ? caught.message : '이미지 모델 일괄 변경에 실패했습니다.');
+    } finally {
+      setIsUpdatingBatchModels(false);
+    }
+  };
+
+  const handleApplyVideoModel = async (scope: 'all' | 'filtered' = 'all') => {
+    if (!batchVideoModel) return;
+    setActionError('');
+    setIsUpdatingBatchModels(true);
+    try {
+      const targets = scope === 'filtered' ? filteredVideoPackages : videoPackages;
+      const targetIds = targets.map((p) => p.id);
+      const updated = await api.updateVisualBatchModels(project.id, {
+        videoModel: batchVideoModel,
+        ids: scope === 'filtered' ? targetIds : undefined,
+      });
+      onProject(updated);
+
+      const newModelMap = {...modelMap};
+      for (const pkg of updated.visualPromptPackages) {
+        if (!targetIds || targetIds.includes(pkg.id)) {
+          newModelMap[pkg.id] = pkg.model;
+        }
+      }
+      setModelMap(newModelMap);
+
+      const modelInfo = RECOMMENDED_VISUAL_MODELS.find((m) => m.id === batchVideoModel);
+      const modelName = modelInfo ? modelInfo.label : batchVideoModel;
+      setBatchSuccessMessage(`✓ ${targets.length}개 영상 항목의 모델이 '${modelName}'(으)로 변경되었습니다.`);
+      setTimeout(() => setBatchSuccessMessage(null), 4000);
+    } catch (caught) {
+      setActionError(caught instanceof Error ? caught.message : '영상 모델 일괄 변경에 실패했습니다.');
+    } finally {
+      setIsUpdatingBatchModels(false);
+    }
+  };
+
+  const handleApplyBothModels = async () => {
+    setActionError('');
+    setIsUpdatingBatchModels(true);
+    try {
+      const updated = await api.updateVisualBatchModels(project.id, {
+        imageModel: batchImageModel,
+        videoModel: batchVideoModel,
+      });
+      onProject(updated);
+
+      const newModelMap = {...modelMap};
+      for (const pkg of updated.visualPromptPackages) {
+        newModelMap[pkg.id] = pkg.model;
+      }
+      setModelMap(newModelMap);
+
+      setBatchSuccessMessage(
+        `✓ 전체 ${project.visualPromptPackages.length}개 항목에 이미지(${batchImageModel}) 및 영상(${batchVideoModel}) 모델이 일괄 적용되었습니다.`,
+      );
+      setTimeout(() => setBatchSuccessMessage(null), 4000);
+    } catch (caught) {
+      setActionError(caught instanceof Error ? caught.message : '모델 동시 일괄 변경에 실패했습니다.');
+    } finally {
+      setIsUpdatingBatchModels(false);
+    }
+  };
+
   const handleApplyBatchModel = async (scope: 'all' | 'filtered') => {
     if (!batchTargetModel) return;
     setActionError('');
@@ -233,6 +350,8 @@ export const VisualStudio = ({project, api, onProject, onNavigate}: Props) => {
   }) => {
     setActionError('');
     setIsUpdatingBatchModels(true);
+    setBatchImageModel(preset.character);
+    setBatchVideoModel(preset.video);
     try {
       const updated = await api.updateVisualBatchModels(project.id, {
         categoryModels: {
@@ -262,26 +381,6 @@ export const VisualStudio = ({project, api, onProject, onNavigate}: Props) => {
       setIsUpdatingBatchModels(false);
     }
   };
-
-  // 필터링된 패키지 목록
-  const filteredPackages = project.visualPromptPackages.filter((pkg) => {
-    if (filterTab === 'all') return true;
-    if (filterTab === 'reference') return pkg.kind.endsWith('reference');
-    if (filterTab === 'intro') return pkg.kind === 'intro-keyframe' || pkg.kind === 'intro-video';
-    // 씬 필터 (예: 'scene-0', 'scene-1')
-    if (filterTab.startsWith('scene-')) {
-      if (pkg.kind === 'intro-keyframe' || pkg.kind === 'intro-video') return false;
-      const sceneIndex = Number(filterTab.replace('scene-', ''));
-      const scene = project.scenes[sceneIndex];
-      if (!scene) return true;
-      return (
-        pkg.sceneDataId?.includes(scene.id) ||
-        pkg.mediaSegmentId?.includes(scene.id) ||
-        pkg.prompt.includes(scene.title)
-      );
-    }
-    return true;
-  });
 
   return (
     <section className="visual-studio">
@@ -484,58 +583,127 @@ export const VisualStudio = ({project, api, onProject, onNavigate}: Props) => {
           <div className="batch-model-toolbar">
             <div className="batch-model-main">
               <div className="batch-model-title-wrap">
-                <SlidersHorizontal size={16} weight="bold" className="batch-model-icon" />
-                <span className="batch-model-title">모델 일괄 변경</span>
-              </div>
-              <div className="batch-model-control">
-                <select
-                  aria-label="일괄 변경할 AI 모델 선택"
-                  className="batch-model-select"
-                  value={batchTargetModel}
-                  disabled={isUpdatingBatchModels}
-                  onChange={(e) => setBatchTargetModel(e.target.value)}
-                >
-                  <option value="">변경할 AI 모델을 선택하세요...</option>
-                  <optgroup label="👤 캐릭터 일관성 추천">
-                    {RECOMMENDED_VISUAL_MODELS.filter((m) => m.category === 'character').map((m) => (
-                      <option key={m.id} value={m.id}>{m.label}</option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="🏞️ 배경·공간 추천">
-                    {RECOMMENDED_VISUAL_MODELS.filter((m) => m.category === 'location').map((m) => (
-                      <option key={m.id} value={m.id}>{m.label}</option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="🎥 영상·모션 추천">
-                    {RECOMMENDED_VISUAL_MODELS.filter((m) => m.category === 'video').map((m) => (
-                      <option key={m.id} value={m.id}>{m.label}</option>
-                    ))}
-                  </optgroup>
-                </select>
-
-                <div className="batch-model-buttons">
-                  {filterTab !== 'all' && (
-                    <button
-                      type="button"
-                      className="batch-model-btn is-filter"
-                      disabled={!batchTargetModel || isUpdatingBatchModels}
-                      onClick={() => handleApplyBatchModel('filtered')}
-                    >
-                      <Sparkle size={13} weight="fill" />
-                      현재 탭 ({filteredPackages.length}개) 변경
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className="batch-model-btn is-primary"
-                    disabled={!batchTargetModel || isUpdatingBatchModels}
-                    onClick={() => handleApplyBatchModel('all')}
-                  >
-                    <Sparkle size={13} weight="fill" />
-                    전체 ({project.visualPromptPackages.length}개) 일괄 변경
-                  </button>
+                <SlidersHorizontal size={17} weight="bold" className="batch-model-icon" />
+                <div>
+                  <span className="batch-model-title">모델 일괄 변경 (이미지 · 영상 분리 설정)</span>
+                  <span className="batch-model-subtitle">
+                    정적 삽화(이미지)와 첫 60초 도입(영상)에 최적화된 AI 모델을 각각 독립적으로 지정할 수 있습니다.
+                  </span>
                 </div>
               </div>
+            </div>
+
+            {/* 이미지 & 영상 모델 분리 선택 카드 그리드 */}
+            <div className="batch-model-grid">
+              {/* 1. 이미지 모델 선택 영역 */}
+              <div className="batch-model-card">
+                <div className="batch-card-header">
+                  <span className="batch-card-badge is-image">🖼️ 이미지 · 삽화 ({imagePackages.length}개)</span>
+                  <small className="batch-card-desc">인물/장소/오브제 기준팩, 키프레임, 본편 삽화</small>
+                </div>
+                <div className="batch-card-controls">
+                  <select
+                    aria-label="일괄 변경할 이미지 모델 선택"
+                    className="batch-model-select"
+                    value={batchImageModel}
+                    disabled={isUpdatingBatchModels}
+                    onChange={(e) => setBatchImageModel(e.target.value)}
+                  >
+                    <optgroup label="👤 캐릭터 일관성 추천">
+                      {RECOMMENDED_VISUAL_MODELS.filter((m) => m.category === 'character').map((m) => (
+                        <option key={m.id} value={m.id}>{m.label}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="🏞️ 배경·공간·오브제 추천">
+                      {RECOMMENDED_VISUAL_MODELS.filter((m) => m.category === 'location').map((m) => (
+                        <option key={m.id} value={m.id}>{m.label}</option>
+                      ))}
+                    </optgroup>
+                  </select>
+                  <div className="batch-card-btn-group">
+                    {filterTab !== 'all' && filteredImagePackages.length > 0 && (
+                      <button
+                        type="button"
+                        className="batch-model-btn is-filter"
+                        disabled={!batchImageModel || isUpdatingBatchModels}
+                        onClick={() => handleApplyImageModel('filtered')}
+                        title="현재 선택된 탭 안의 이미지만 변경"
+                      >
+                        <Sparkle size={12} weight="fill" />
+                        현재 탭 ({filteredImagePackages.length}개)
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="batch-model-btn is-image-btn"
+                      disabled={!batchImageModel || isUpdatingBatchModels}
+                      onClick={() => handleApplyImageModel('all')}
+                    >
+                      <Sparkle size={12} weight="fill" />
+                      이미지 전체 ({imagePackages.length}개) 적용
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. 영상 모델 선택 영역 */}
+              <div className="batch-model-card">
+                <div className="batch-card-header">
+                  <span className="batch-card-badge is-video">🎥 첫 60초 영상 ({videoPackages.length}개)</span>
+                  <small className="batch-card-desc">초반 이탈 방지를 위한 시네마틱 모션 비디오</small>
+                </div>
+                <div className="batch-card-controls">
+                  <select
+                    aria-label="일괄 변경할 영상 모델 선택"
+                    className="batch-model-select"
+                    value={batchVideoModel}
+                    disabled={isUpdatingBatchModels}
+                    onChange={(e) => setBatchVideoModel(e.target.value)}
+                  >
+                    <optgroup label="🎥 영상·모션 추천">
+                      {RECOMMENDED_VISUAL_MODELS.filter((m) => m.category === 'video').map((m) => (
+                        <option key={m.id} value={m.id}>{m.label}</option>
+                      ))}
+                    </optgroup>
+                  </select>
+                  <div className="batch-card-btn-group">
+                    {filterTab !== 'all' && filteredVideoPackages.length > 0 && (
+                      <button
+                        type="button"
+                        className="batch-model-btn is-filter"
+                        disabled={!batchVideoModel || isUpdatingBatchModels}
+                        onClick={() => handleApplyVideoModel('filtered')}
+                        title="현재 선택된 탭 안의 영상만 변경"
+                      >
+                        <Sparkle size={12} weight="fill" />
+                        현재 탭 ({filteredVideoPackages.length}개)
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="batch-model-btn is-video-btn"
+                      disabled={!batchVideoModel || isUpdatingBatchModels}
+                      onClick={() => handleApplyVideoModel('all')}
+                    >
+                      <Sparkle size={12} weight="fill" />
+                      영상 전체 ({videoPackages.length}개) 적용
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 통합 동시 적용 바 */}
+            <div className="batch-apply-combined-row">
+              <button
+                type="button"
+                className="batch-model-btn is-primary is-all-combined"
+                disabled={isUpdatingBatchModels}
+                onClick={handleApplyBothModels}
+              >
+                <Sparkle size={14} weight="fill" />
+                ✨ 이미지({imagePackages.length}개) & 영상({videoPackages.length}개) 설정 한 번에 동시 적용
+              </button>
             </div>
 
             {/* 빠른 추천 세트 프리셋 */}
@@ -673,9 +841,11 @@ export const VisualStudio = ({project, api, onProject, onNavigate}: Props) => {
                       {item.prompt.slice(0, 120)}...
                     </p>
 
-                    {/* 모델 선택 드롭다운 */}
+                    {/* 모델 선택 드롭다운 (이미지/영상 분리) */}
                     <div className="card-field-row">
-                      <label htmlFor={`model-${item.id}`}>AI 모델</label>
+                      <label htmlFor={`model-${item.id}`}>
+                        {item.kind === 'intro-video' ? '🎥 영상 AI 모델' : '🖼️ 이미지 AI 모델'}
+                      </label>
                       <select
                         id={`model-${item.id}`}
                         value={currentModel}
@@ -686,21 +856,26 @@ export const VisualStudio = ({project, api, onProject, onNavigate}: Props) => {
                           api.updateVisualPrompt(project.id, item.id, {model: newModel}).catch(() => {});
                         }}
                       >
-                        <optgroup label="👤 캐릭터 일관성 추천">
-                          {RECOMMENDED_VISUAL_MODELS.filter((m) => m.category === 'character').map((m) => (
-                            <option key={m.id} value={m.id}>{m.label}</option>
-                          ))}
-                        </optgroup>
-                        <optgroup label="🏞️ 배경·공간 추천">
-                          {RECOMMENDED_VISUAL_MODELS.filter((m) => m.category === 'location').map((m) => (
-                            <option key={m.id} value={m.id}>{m.label}</option>
-                          ))}
-                        </optgroup>
-                        <optgroup label="🎥 영상·모션 추천">
-                          {RECOMMENDED_VISUAL_MODELS.filter((m) => m.category === 'video').map((m) => (
-                            <option key={m.id} value={m.id}>{m.label}</option>
-                          ))}
-                        </optgroup>
+                        {item.kind === 'intro-video' ? (
+                          <optgroup label="🎥 영상·모션 추천">
+                            {RECOMMENDED_VISUAL_MODELS.filter((m) => m.category === 'video').map((m) => (
+                              <option key={m.id} value={m.id}>{m.label}</option>
+                            ))}
+                          </optgroup>
+                        ) : (
+                          <>
+                            <optgroup label="👤 캐릭터 일관성 추천">
+                              {RECOMMENDED_VISUAL_MODELS.filter((m) => m.category === 'character').map((m) => (
+                                <option key={m.id} value={m.id}>{m.label}</option>
+                              ))}
+                            </optgroup>
+                            <optgroup label="🏞️ 배경·공간·오브제 추천">
+                              {RECOMMENDED_VISUAL_MODELS.filter((m) => m.category === 'location').map((m) => (
+                                <option key={m.id} value={m.id}>{m.label}</option>
+                              ))}
+                            </optgroup>
+                          </>
+                        )}
                       </select>
                     </div>
 

@@ -338,6 +338,9 @@ export class HiggsfieldVisualRunner {
     projectId: string,
     options: {
       model?: string;
+      imageModel?: string;
+      videoModel?: string;
+      targetType?: 'all' | 'image' | 'video';
       ids?: string[];
       categoryModels?: {
         character?: string;
@@ -381,9 +384,32 @@ export class HiggsfieldVisualRunner {
         }
       }
 
+      const isVideoPkg = pkg.kind === 'intro-video';
+
+      // 이미지 및 영상 전용 모델 분리 적용
+      if (options.imageModel && !isVideoPkg) {
+        return {...pkg, model: options.imageModel};
+      }
+      if (options.videoModel && isVideoPkg) {
+        return {...pkg, model: options.videoModel};
+      }
+
+      // targetType 명시적 지정 지원
+      if (options.targetType === 'image') {
+        if (!isVideoPkg && options.model) {
+          return {...pkg, model: options.model};
+        }
+        return pkg;
+      }
+      if (options.targetType === 'video') {
+        if (isVideoPkg && options.model) {
+          return {...pkg, model: options.model};
+        }
+        return pkg;
+      }
+
       if (options.model) {
         if (!targetIdsSet) {
-          const isVideoPkg = pkg.kind === 'intro-video';
           const isVideoModel = VIDEO_MODELS.has(options.model);
           if (isVideoPkg && !isVideoModel) return pkg;
           if (!isVideoPkg && isVideoModel) return pkg;
