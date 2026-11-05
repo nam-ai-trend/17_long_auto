@@ -106,6 +106,17 @@ export class HiggsfieldVisualRunner {
         combinedPrompt = `${targetPkg.prompt}. User revision feedback: ${feedbackText}`;
       }
 
+      // 장소 및 오브제 기준팩에 사람이 생성되는 것을 원천 차단
+      if (targetPkg.kind === 'location-reference') {
+        if (!combinedPrompt.includes('no people') && !combinedPrompt.includes('no humans')) {
+          combinedPrompt = `${combinedPrompt}. Pure architectural and natural scenery, completely uninhabited, vacant background, strictly no people, no humans, no crowd, no characters`;
+        }
+      } else if (targetPkg.kind === 'object-reference') {
+        if (!combinedPrompt.includes('no people') && !combinedPrompt.includes('no humans')) {
+          combinedPrompt = `${combinedPrompt}. Isolated prop still-life, strictly no people, no humans, no hands holding`;
+        }
+      }
+
       const isVideo = VIDEO_MODELS.has(selectedModel) || targetPkg.kind === 'intro-video';
       const outputExt = isVideo ? 'mp4' : 'png';
 

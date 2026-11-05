@@ -59,6 +59,21 @@ describe('시각 프롬프트 패키지', () => {
     expect(still?.negativePrompt).toContain('watermark');
   });
 
+  it('장소 및 오브제 기준팩은 인물이 나오지 않도록 프롬프트와 금지 프롬프트가 설정된다', () => {
+    const packages = buildVisualPromptPackages({visualBible, sceneData, mediaSegments});
+    const locationPkg = packages.find((item) => item.kind === 'location-reference');
+    const objectPkg = packages.find((item) => item.kind === 'object-reference');
+
+    expect(locationPkg?.prompt).toContain('no people');
+    expect(locationPkg?.prompt).toContain('no humans');
+    expect(locationPkg?.negativePrompt).toContain('people');
+    expect(locationPkg?.negativePrompt).toContain('crowd');
+
+    expect(objectPkg?.prompt).toContain('no people');
+    expect(objectPkg?.negativePrompt).toContain('people');
+    expect(objectPkg?.negativePrompt).toContain('hands');
+  });
+
   it('동일한 입력을 다시 패키징해도 참조 ID와 패키지 ID가 유지된다', () => {
     const first = buildVisualPromptPackages({visualBible, sceneData, mediaSegments});
     const second = buildVisualPromptPackages({visualBible, sceneData, mediaSegments});

@@ -189,25 +189,56 @@ export const buildVisualPromptPackages = ({
     ...visualBible.filter((entry) => entry.kind === 'location').slice(0, VISUAL_LIMITS.locations),
     ...visualBible.filter((entry) => entry.kind === 'object').slice(0, VISUAL_LIMITS.objects),
   ];
-  const packages: VisualPromptPackage[] = cappedEntries.map((entry) => ({
-    id: `prompt-reference-${entry.id}`,
-    kind: referenceKind(entry.kind),
-    sourceId: entry.id,
-    sceneDataId: null,
-    mediaSegmentId: null,
-    model: referenceModel(entry.kind),
-    prompt: [
-      VISUAL_STYLE.prompt,
-      `${entry.kind} reference sheet for ${entry.name}`,
-      entry.description,
-      `locked traits: ${entry.lockedTraits.join(', ') || 'preserve the approved design'}`,
-      entry.kind === 'character' ? 'fictional character, no Soul ID, consistent front, profile and expression views' : 'single canonical reference asset',
-    ].join('. '),
-    ...baseFields,
-    referenceKeys: [entry.id],
-    durationSeconds: null,
-    lockedTraits: entry.lockedTraits,
-  }));
+  const packages: VisualPromptPackage[] = cappedEntries.map((entry) => {
+    const isCharacter = entry.kind === 'character';
+    const isLocation = entry.kind === 'location';
+
+    let promptText = '';
+    let negativeText: string = VISUAL_STYLE.negative;
+
+    if (isCharacter) {
+      promptText = [
+        VISUAL_STYLE.prompt,
+        `character reference sheet for ${entry.name}`,
+        entry.description,
+        `locked traits: ${entry.lockedTraits.join(', ') || 'preserve the approved design'}`,
+        'fictional character, no Soul ID, consistent front, profile and expression views, neutral background sheet',
+      ].join('. ');
+    } else if (isLocation) {
+      promptText = [
+        'mature semi-realistic Joseon-era architectural and landscape digital illustration, restrained ink contours, tactile painterly brushwork, atmospheric depth, period-accurate warm natural light, Joseon historical atmosphere',
+        `location environment reference for ${entry.name}`,
+        entry.description,
+        `locked traits: ${entry.lockedTraits.join(', ') || 'preserve the approved setting design'}`,
+        'pure architectural and natural scenery, completely uninhabited, vacant background, strictly no people, no humans, no crowd, no silhouette of person, empty environment',
+      ].join('. ');
+      negativeText = `${VISUAL_STYLE.negative}, people, person, human, crowd, man, woman, character, face, silhouette of person, walking people, standing person`;
+    } else {
+      promptText = [
+        'mature semi-realistic Joseon-era historical object illustration, tactile painterly brushwork, exquisite authentic texture and craftsmanship, period-accurate light',
+        `canonical prop reference for ${entry.name}`,
+        entry.description,
+        `locked traits: ${entry.lockedTraits.join(', ') || 'preserve the approved object design'}`,
+        'isolated prop still-life study, focused on object detail, strictly no people, no humans, no hands holding',
+      ].join('. ');
+      negativeText = `${VISUAL_STYLE.negative}, people, person, human, character, face, hands, holding, crowd`;
+    }
+
+    return {
+      id: `prompt-reference-${entry.id}`,
+      kind: referenceKind(entry.kind),
+      sourceId: entry.id,
+      sceneDataId: null,
+      mediaSegmentId: null,
+      model: referenceModel(entry.kind),
+      ...baseFields,
+      prompt: promptText,
+      negativePrompt: negativeText,
+      referenceKeys: [entry.id],
+      durationSeconds: null,
+      lockedTraits: entry.lockedTraits,
+    };
+  });
   const sceneById = new Map(sceneData.map((scene) => [scene.id, scene]));
 
   for (const segment of mediaSegments) {
