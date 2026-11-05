@@ -126,6 +126,7 @@ export const VisualStudio = ({project, api, onProject, onNavigate}: Props) => {
 
   const hasActiveWork =
     isBatchRunning ||
+    generatingIds.size > 0 ||
     project.visualPromptPackages.some((p) => p.status === 'generating' || p.status === 'queued');
 
   // 마운트 시 현재 서버의 비주얼 배치 진행 상태 및 최신 프로젝트 자동 동기화

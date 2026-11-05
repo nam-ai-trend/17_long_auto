@@ -203,7 +203,8 @@ export const createRoutes = (
   });
 
   router.get('/projects/:id', (request, response) => {
-    response.json(requireProject(request.params.id));
+    const project = visualRunner.cleanupZombies(request.params.id) ?? requireProject(request.params.id);
+    response.json(project);
   });
 
   router.get('/projects/:id/manifest', (request, response) => {
@@ -491,6 +492,7 @@ export const createRoutes = (
 
   router.get('/projects/:id/visual-prompts/batch-status', (request, response) => {
     requireProject(request.params.id);
+    visualRunner.cleanupZombies(request.params.id);
     response.json({isBatchRunning: visualRunner.isBatchRunning(request.params.id)});
   });
 

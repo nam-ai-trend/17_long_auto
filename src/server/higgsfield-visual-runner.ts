@@ -77,6 +77,58 @@ export class HiggsfieldVisualRunner {
     return this.activeSingleGenerations.has(packageId);
   }
 
+  /**
+   * 백그라운드 배치나 단건 실행 프로세스가 없는데 DB에 'generating' 또는 'queued'로
+   * 고착된 좀비 패키지를 정리 (generating -> failed, queued -> planned)
+   */
+  public cleanupZombies(projectId: string): Project {
+    const repo = new ProjectRepository(this.database, this.assetRoot);
+    const project = repo.get(projectId);
+    if (!project) return project as any;
+
+    const isBatchActive = this.activeBatchProjects.has(projectId);
+    let modified = false;
+
+    const updatedPackages = project.visualPromptPackages.map((pkg) => {
+      const isPkgActive = this.activeSingleGenerations.has(pkg.id);
+
+      // 배치가 돌고 있거나 단건 실행 중이면 정상 진행 중이므로 건드리지 않음
+      if (isBatchActive || isPkgActive) {
+        return pkg;
+      }
+
+      // 백그라운드 프로세스가 없는데 generating으로 고착된 경우 -> failed로 전환
+      if (pkg.status === 'generating') {
+        modified = true;
+        return {
+          ...pkg,
+          status: 'failed' as const,
+          error: pkg.error || '생성 프로세스가 중단되었습니다. [다시 시도]를 눌러주세요.',
+        };
+      }
+
+      // 백그라운드 배치가 없는데 queued로 대기 중인 경우 -> planned로 복귀
+      if (pkg.status === 'queued') {
+        modified = true;
+        return {
+          ...pkg,
+          status: 'planned' as const,
+        };
+      }
+
+      return pkg;
+    });
+
+    if (modified) {
+      project.visualPromptPackages = updatedPackages;
+      const saved = repo.save(project);
+      syncProjectOutputs(saved, this.assetRoot);
+      return saved;
+    }
+
+    return project;
+  }
+
   public async generateSinglePackage(
     projectId: string,
     packageId: string,
@@ -641,6 +693,14 @@ export class HiggsfieldVisualRunner {
       const jobId = jobMatch ? jobMatch[1] : '';
       throw new Error(
         `[Higgsfield 서버 일시 오류] AI 렌더링 서버에서 작업이 ${maxRetries}회 연속 실패했습니다 (${jobId ? `job: ${jobId}` : originalMsg.trim()}). 잠시 후 [재생성]을 눌러주세요.`,
+      );
+    }
+
+    if (originalMsg.includes('ended with status "ip_detected"')) {
+      const jobMatch = originalMsg.match(/job ([a-f0-9-]+) ended with status "ip_detected"/i);
+      const jobId = jobMatch ? jobMatch[1] : '';
+      throw new Error(
+        `[저작권/초상권 필터 감지] AI 서버의 공인/초상권 보호 필터(ip_detected)로 인해 작업이 거부되었습니다 (${jobId ? `job: ${jobId}` : ''}). 대본의 인물명을 점검하거나 [다시 시도]를 누르면 정상 생성됩니다.`,
       );
     }
 
