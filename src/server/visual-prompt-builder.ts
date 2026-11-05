@@ -6,6 +6,7 @@ import type {
   VisualPromptPackage,
 } from '../shared/contracts';
 import {VISUAL_LIMITS, VISUAL_STYLE} from '../shared/presets';
+import {sanitizePromptSafety} from './prompt-safety';
 
 type BuildVisualPromptPackagesInput = {
   visualBible: VisualBibleEntry[];
@@ -163,20 +164,23 @@ const scenePrompt = (
   scene: MediaSceneData,
   instruction: string,
   dynamicAction?: string,
-) => [
-  VISUAL_STYLE.prompt,
-  `scene: ${scene.summary}`,
-  `characters: ${scene.characters.join(', ') || 'no visible character'}`,
-  `location: ${scene.location}`,
-  `time: ${scene.timeframe}`,
-  `emotion: ${scene.emotion}`,
-  `action: ${dynamicAction || scene.action}`,
-  `objects: ${scene.objectStates.join('; ') || 'none'}`,
-  `composition: ${baseFields.composition}`,
-  `camera distance: ${baseFields.cameraDistance}`,
-  `lighting: ${baseFields.lighting}`,
-  instruction,
-].join('. ');
+) =>
+  sanitizePromptSafety(
+    [
+      VISUAL_STYLE.prompt,
+      `scene: ${scene.summary}`,
+      `characters: ${scene.characters.join(', ') || 'no visible character'}`,
+      `location: ${scene.location}`,
+      `time: ${scene.timeframe}`,
+      `emotion: ${scene.emotion}`,
+      `action: ${dynamicAction || scene.action}`,
+      `objects: ${scene.objectStates.join('; ') || 'none'}`,
+      `composition: ${baseFields.composition}`,
+      `camera distance: ${baseFields.cameraDistance}`,
+      `lighting: ${baseFields.lighting}`,
+      instruction,
+    ].join('. '),
+  );
 
 export const buildVisualPromptPackages = ({
   visualBible,
@@ -232,7 +236,7 @@ export const buildVisualPromptPackages = ({
       mediaSegmentId: null,
       model: referenceModel(entry.kind),
       ...baseFields,
-      prompt: promptText,
+      prompt: sanitizePromptSafety(promptText),
       negativePrompt: negativeText,
       referenceKeys: [entry.id],
       durationSeconds: null,

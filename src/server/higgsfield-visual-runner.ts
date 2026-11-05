@@ -5,6 +5,7 @@ import type {DatabaseSync} from 'node:sqlite';
 import type {Project, VisualPromptPackage} from '../shared/contracts';
 import {ProjectRepository} from './project-repository';
 import {syncProjectOutputs} from './project-outputs';
+import {sanitizePromptSafety} from './prompt-safety';
 
 export interface VisualGenerationOptions {
   model?: string;
@@ -105,6 +106,9 @@ export class HiggsfieldVisualRunner {
       if (feedbackText) {
         combinedPrompt = `${targetPkg.prompt}. User revision feedback: ${feedbackText}`;
       }
+
+      // 유명 연예인 및 실존 인물 실명에 의한 저작권/초상권 필터 차단 방지 살균
+      combinedPrompt = sanitizePromptSafety(combinedPrompt);
 
       // 장소 및 오브제 기준팩에 사람이 생성되는 것을 원천 차단
       if (targetPkg.kind === 'location-reference') {

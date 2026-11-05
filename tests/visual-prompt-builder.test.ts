@@ -80,4 +80,43 @@ describe('시각 프롬프트 패키지', () => {
 
     expect(second).toEqual(first);
   });
+
+  it('유명 연예인 실명(김수현 등)이 프롬프트에 들어가면 초상권/저작권 필터 차단 방지를 위해 자동 살균된다', () => {
+    const celebrityBible: VisualBibleEntry[] = [
+      {id: 'character-kim', kind: 'character', name: '김수현', description: '젊은 선비 Kim Soo-hyun', lockedTraits: ['갓'], status: 'ready'},
+    ];
+    const celebrityScene: MediaSceneData[] = [
+      {
+        id: 'media-scene-kim',
+        storySceneId: 'scene-kim',
+        cueIds: ['cue-kim'],
+        start: 0,
+        end: 10,
+        timingSource: 'tts',
+        summary: '김수현이 비밀 서찰을 읽는다.',
+        characters: ['김수현'],
+        location: '한양 서점',
+        timeframe: '낮',
+        emotion: '긴장',
+        action: '김수현이 서찰을 연다.',
+        objectStates: [],
+        previousLink: null,
+        nextLink: null,
+      },
+    ];
+    const celebritySegments: MediaSegment[] = [
+      {id: 'kim-segment', sceneId: 'scene-kim', sceneDataId: 'media-scene-kim', start: 0, end: 5, type: 'video', prompt: '', semanticBreak: null, referenceKeys: [], parallaxRecommended: false, parallaxEnabled: false, motionStages: []},
+    ];
+
+    const packages = buildVisualPromptPackages({
+      visualBible: celebrityBible,
+      sceneData: celebrityScene,
+      mediaSegments: celebritySegments,
+    });
+
+    for (const pkg of packages) {
+      expect(pkg.prompt).not.toContain('김수현');
+      expect(pkg.prompt).not.toContain('Kim Soo-hyun');
+    }
+  });
 });
