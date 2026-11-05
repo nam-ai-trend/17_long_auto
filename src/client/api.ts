@@ -55,6 +55,7 @@ export type YadamApi = {
     options?: {ids?: string[]},
   ) => Promise<{queuedCount: number; project?: Project}>;
   getVisualBatchStatus: (projectId: string) => Promise<{isBatchRunning: boolean}>;
+  syncVisualPrompts: (projectId: string) => Promise<Project>;
   updateVisualBatchModels: (
     projectId: string,
     options: {
@@ -165,6 +166,8 @@ export const api: YadamApi = {
     }),
   getVisualBatchStatus: (projectId) =>
     request(`/api/projects/${projectId}/visual-prompts/batch-status`),
+  syncVisualPrompts: (projectId) =>
+    request(`/api/projects/${projectId}/visual-prompts/sync`, {method: 'POST'}),
   updateVisualBatchModels: (projectId, options) =>
     request(`/api/projects/${projectId}/visual-prompts/batch-models`, {
       method: 'POST',

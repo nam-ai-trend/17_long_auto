@@ -185,6 +185,7 @@ describe('App critical flow', () => {
       updateVisualPrompt: async () => project,
       startVisualBatch: async () => ({queuedCount: 0}),
       getVisualBatchStatus: async () => ({isBatchRunning: false}),
+      syncVisualPrompts: async () => project,
       updateVisualBatchModels: async () => project,
       startRender: async () => ({
         isRendering: false,

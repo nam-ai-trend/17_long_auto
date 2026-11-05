@@ -2430,6 +2430,59 @@ textarea:focus {
   cursor: wait;
 }
 
+.generate-card-btn.is-failed-retry {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid rgba(185, 28, 28, .25);
+}
+
+.generate-card-btn.is-failed-retry:hover:not(:disabled) {
+  background: #fecaca;
+  color: #991b1b;
+}
+
+.visual-card.is-failed {
+  border-color: rgba(185, 28, 28, .35);
+  box-shadow: 0 4px 16px rgba(185, 28, 28, .08);
+}
+
+.card-error-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  font-size: 11px;
+  line-height: 1.45;
+  margin-top: 4px;
+}
+
+.card-error-callout strong {
+  display: block;
+  font-weight: 750;
+  margin-bottom: 2px;
+  color: #b91c1c;
+}
+
+.card-error-callout p {
+  margin: 0;
+  color: #7f1d1d;
+  word-break: break-word;
+}
+
+.batch-generate-btn.is-sync-batch {
+  background: #ede9fe;
+  color: #6d28d9;
+  border: 1px solid rgba(109, 40, 217, .25);
+}
+
+.batch-generate-btn.is-sync-batch:hover:not(:disabled) {
+  background: #ddd6fe;
+}
+
 .generate-card-btn:disabled {
   opacity: .6;
   cursor: not-allowed;

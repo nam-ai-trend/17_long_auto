@@ -61,6 +61,7 @@ const extractMediaUrl = (stdout: string, isVideo: boolean = false): string | nul
 
 export class HiggsfieldVisualRunner {
   private activeBatchProjects = new Set<string>();
+  private activeSingleGenerations = new Set<string>();
 
   public constructor(
     private readonly database: DatabaseSync,
@@ -72,7 +73,24 @@ export class HiggsfieldVisualRunner {
     return this.activeBatchProjects.has(projectId);
   }
 
+  public isPackageRunning(packageId: string): boolean {
+    return this.activeSingleGenerations.has(packageId);
+  }
+
   public async generateSinglePackage(
+    projectId: string,
+    packageId: string,
+    options: VisualGenerationOptions = {},
+  ): Promise<Project> {
+    this.activeSingleGenerations.add(packageId);
+    try {
+      return await this.executeGenerateSinglePackage(projectId, packageId, options);
+    } finally {
+      this.activeSingleGenerations.delete(packageId);
+    }
+  }
+
+  private async executeGenerateSinglePackage(
     projectId: string,
     packageId: string,
     options: VisualGenerationOptions = {},
@@ -449,6 +467,107 @@ export class HiggsfieldVisualRunner {
     const saved = repo.save(project);
     syncProjectOutputs(saved, this.assetRoot);
     return saved;
+  }
+
+  /**
+   * 원격 Higgsfield 클라우드 작업 상태를 대조하여 완료된 미디어는 자동 수신하고,
+   * 실패/중단된 작업은 명확하게 failed 상태 및 에러 사유로 복구하는 동기화 메소드
+   */
+  public async reconcileWithRemote(projectId: string): Promise<Project> {
+    const repo = new ProjectRepository(this.database, this.assetRoot);
+    const project = repo.get(projectId);
+    if (!project) throw new Error('프로젝트를 찾을 수 없습니다.');
+
+    let remoteJobs: any[] = [];
+    try {
+      const stdout = await this.runCli(['generate', 'list', '--json']);
+      remoteJobs = JSON.parse(stdout.trim());
+    } catch (listErr) {
+      console.warn('[VisualRunner] 원격 작업 목록 조회 실패:', listErr);
+      return project;
+    }
+
+    if (!Array.isArray(remoteJobs) || remoteJobs.length === 0) {
+      return project;
+    }
+
+    const visualDir = join(this.assetRoot, projectId, 'visuals');
+    if (!existsSync(visualDir)) {
+      mkdirSync(visualDir, {recursive: true});
+    }
+
+    let modified = false;
+
+    const normalize = (text: string) =>
+      text
+        .toLowerCase()
+        .replace(/김수현/g, '수현')
+        .replace(/kim\s*soo-?hyun/g, 'su-hyeon')
+        .replace(/[^\w\s가-힣]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    for (let i = 0; i < project.visualPromptPackages.length; i++) {
+      const pkg = project.visualPromptPackages[i];
+      const isVideo = VIDEO_MODELS.has(pkg.model) || pkg.kind === 'intro-video';
+      const outputExt = isVideo ? 'mp4' : 'png';
+      const localFilePath = join(visualDir, `${pkg.id}.${outputExt}`);
+
+      // 이미 로컬 파일이 온전히 존재하고 ready 상태인 항목은 스킵
+      if (pkg.status === 'ready' && existsSync(localFilePath)) {
+        continue;
+      }
+
+      const pkgNorm = normalize(pkg.prompt);
+      const pkgSnippet = pkgNorm.slice(0, 80);
+
+      // 원격 작업 중 프롬프트가 매칭되는 최근 작업 탐색
+      const matchingJob = remoteJobs.find((job) => {
+        const jobNorm = normalize(job.params?.prompt || '');
+        if (!jobNorm) return false;
+        return jobNorm.includes(pkgSnippet) || pkgNorm.includes(jobNorm.slice(0, 80));
+      });
+
+      if (matchingJob) {
+        if (matchingJob.status === 'completed' && matchingJob.result_url) {
+          try {
+            await this.downloadFile(matchingJob.result_url, localFilePath);
+            project.visualPromptPackages[i] = {
+              ...pkg,
+              status: 'ready',
+              assetUrl: `/api/projects/${projectId}/visual-prompts/${pkg.id}/media`,
+              error: null,
+            };
+            modified = true;
+          } catch (dlErr) {
+            console.error(`[VisualRunner] 원격 미디어 다운로드 실패 (${pkg.id}):`, dlErr);
+          }
+        } else if (matchingJob.status === 'failed' || matchingJob.status === 'rejected') {
+          project.visualPromptPackages[i] = {
+            ...pkg,
+            status: 'failed',
+            error: 'Higgsfield AI 렌더링 서버에서 작업이 실패했습니다. [다시 시도]를 눌러주세요.',
+          };
+          modified = true;
+        }
+      } else if (pkg.status === 'generating' && !this.isBatchRunning(projectId) && !this.isPackageRunning(pkg.id)) {
+        // 백그라운드 프로세스가 없는데 generating으로 고착된 유령 작업은 failed로 복구하여 재시도 유도
+        project.visualPromptPackages[i] = {
+          ...pkg,
+          status: 'failed',
+          error: '생성 프로세스가 중단되었습니다. [다시 시도]를 눌러주세요.',
+        };
+        modified = true;
+      }
+    }
+
+    if (modified) {
+      const saved = repo.save(project);
+      syncProjectOutputs(saved, this.assetRoot);
+      return saved;
+    }
+
+    return project;
   }
 
   /**

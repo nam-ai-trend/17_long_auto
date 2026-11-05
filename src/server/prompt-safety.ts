@@ -22,3 +22,4 @@ export const sanitizePromptSafety = (text: string): string => {
     .replace(/공유/g, '유')
     .replace(/Gong\s*Yoo/gi, 'Joseon scholar');
 };
+

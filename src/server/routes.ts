@@ -489,9 +489,27 @@ export const createRoutes = (
     response.json(jobs.retry(request.params.jobId));
   });
 
-  router.get('/projects/:id/visual-prompts/batch-status', (request, response) => {
+  router.get('/projects/:id/visual-prompts/batch-status', async (request, response) => {
+    const project = requireProject(request.params.id);
+    const isBatchRunning = visualRunner.isBatchRunning(request.params.id);
+    // 배치가 돌고 있지 않은데 generating 상태의 패키지가 방치되어 있다면 원격과 자동 대조 동기화
+    const hasStuckGenerations = project.visualPromptPackages.some(
+      (p) => p.status === 'generating' && !visualRunner.isPackageRunning(p.id),
+    );
+    if (!isBatchRunning && hasStuckGenerations) {
+      try {
+        await visualRunner.reconcileWithRemote(request.params.id);
+      } catch (syncErr) {
+        console.warn('[Routes] 배치 상태 조회 중 원격 동기화 경고:', syncErr);
+      }
+    }
+    response.json({isBatchRunning});
+  });
+
+  router.post('/projects/:id/visual-prompts/sync', async (request, response) => {
     requireProject(request.params.id);
-    response.json({isBatchRunning: visualRunner.isBatchRunning(request.params.id)});
+    const updated = await visualRunner.reconcileWithRemote(request.params.id);
+    response.json(updated);
   });
 
   router.post('/projects/:id/visual-prompts/batch-generate', async (request, response) => {

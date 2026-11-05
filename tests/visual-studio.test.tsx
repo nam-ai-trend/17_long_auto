@@ -305,4 +305,57 @@ describe('VisualStudio batch model change', () => {
       },
     });
   });
+
+  it('실패한 패키지는 에러 콜아웃과 다시 시도 버튼, 실패 배지를 명확하게 표시한다', async () => {
+    const failedProject = {
+      ...mockProject,
+      visualPromptPackages: [
+        {
+          id: 'prompt-video-failed',
+          kind: 'intro-video' as const,
+          sourceId: 'intro-1',
+          sceneDataId: 'media-scene-scene-1',
+          mediaSegmentId: 'intro-1',
+          prompt: '조선 시대 선비의 고뇌',
+          model: 'seedance_2_0_fast',
+          status: 'failed' as const,
+          error: '저작권 제한으로 인해 거부되었어요.',
+          aspectRatio: '16:9',
+          cameraDistance: 'medium-wide',
+          composition: 'rule-of-thirds',
+          lighting: 'warm',
+          negativePrompt: '',
+          referenceKeys: [],
+          lockedTraits: [],
+          durationSeconds: 5,
+        },
+      ],
+    };
+
+    const syncVisualPrompts = vi.fn().mockResolvedValue(failedProject);
+    const api = {
+      updateVisualBatchModels: vi.fn(),
+      updateParallax: vi.fn(),
+      addVisualBibleEntry: vi.fn(),
+      startVisualBatch: vi.fn(),
+      getVisualBatchStatus: vi.fn().mockResolvedValue({isBatchRunning: false}),
+      syncVisualPrompts,
+      generateVisualPrompt: vi.fn(),
+      updateVisualPrompt: vi.fn().mockResolvedValue(failedProject),
+      getProject: vi.fn().mockResolvedValue(failedProject),
+    } as unknown as YadamApi;
+
+    render(<VisualStudio project={failedProject} api={api} onProject={vi.fn()} />);
+
+    // 실패 배지 및 에러 콜아웃 확인
+    expect(screen.getByText('실패')).toBeInTheDocument();
+    expect(screen.getByText('저작권 제한으로 인해 거부되었어요.')).toBeInTheDocument();
+    expect(screen.getByRole('button', {name: /다시 시도 \(재생성\)/})).toBeInTheDocument();
+
+    // 클라우드 동기화 버튼 확인 및 클릭
+    const syncBtn = screen.getByRole('button', {name: /클라우드 동기화/});
+    expect(syncBtn).toBeInTheDocument();
+    await userEvent.click(syncBtn);
+    expect(syncVisualPrompts).toHaveBeenCalledWith('project-visual-test');
+  });
 });

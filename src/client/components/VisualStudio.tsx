@@ -2,6 +2,7 @@ import {
   Aperture,
   ArrowClockwise,
   CheckCircle,
+  CloudArrowDown,
   CubeFocus,
   Eye,
   FilmStrip,
@@ -10,6 +11,7 @@ import {
   Plus,
   SlidersHorizontal,
   Sparkle,
+  WarningCircle,
   X,
 } from '@phosphor-icons/react';
 import {useEffect, useRef, useState} from 'react';
@@ -70,6 +72,7 @@ export const VisualStudio = ({project, api, onProject, onNavigate}: Props) => {
   const [batchImageModel, setBatchImageModel] = useState<string>('seedream_5_0_flash');
   const [batchVideoModel, setBatchVideoModel] = useState<string>('seedance_2_0_fast');
   const [isUpdatingBatchModels, setIsUpdatingBatchModels] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [batchSuccessMessage, setBatchSuccessMessage] = useState<string | null>(null);
 
   const intro = project.mediaSegments.filter((segment) => segment.type === 'video');
@@ -217,12 +220,31 @@ export const VisualStudio = ({project, api, onProject, onNavigate}: Props) => {
       onProject(updated);
     } catch (caught) {
       setActionError(caught instanceof Error ? caught.message : '생성에 실패했습니다.');
+      try {
+        const fresh = await api.getProject(project.id);
+        onProject(fresh);
+      } catch {}
     } finally {
       setGeneratingIds((prev) => {
         const next = new Set(prev);
         next.delete(pkg.id);
         return next;
       });
+    }
+  };
+
+  const handleSyncRemote = async () => {
+    setActionError('');
+    setIsSyncing(true);
+    try {
+      const updated = await api.syncVisualPrompts(project.id);
+      onProject(updated);
+      setBatchSuccessMessage('✓ AI 클라우드(Higgsfield) 작업 상태와 성공적으로 동기화되었습니다.');
+      setTimeout(() => setBatchSuccessMessage(null), 4000);
+    } catch (caught) {
+      setActionError(caught instanceof Error ? caught.message : '클라우드 동기화에 실패했습니다.');
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -582,6 +604,18 @@ export const VisualStudio = ({project, api, onProject, onNavigate}: Props) => {
                   </>
                 )}
               </button>
+
+              {/* 5. 클라우드 동기화 (원격 완성 미디어 자동 회수 및 정체 해소) */}
+              <button
+                type="button"
+                className={`batch-generate-btn is-sync-batch ${isSyncing ? 'is-running' : ''}`}
+                onClick={handleSyncRemote}
+                disabled={isSyncing}
+                title="AI 클라우드(Higgsfield)에 이미 생성 완료된 영상·이미지를 즉시 가져와 프로그램에 붙이고 상태를 동기화합니다"
+              >
+                <CloudArrowDown size={16} className={isSyncing ? 'spin-icon' : ''} />
+                {isSyncing ? '클라우드 동기화 중...' : '클라우드 동기화'}
+              </button>
             </div>
           </header>
 
@@ -844,11 +878,11 @@ export const VisualStudio = ({project, api, onProject, onNavigate}: Props) => {
               const feedbackValue = feedbackMap[item.id] !== undefined ? feedbackMap[item.id] : (item.feedback ?? '');
 
               return (
-                <article key={item.id} className={`visual-card bezel-shell ${isReady ? 'is-ready' : ''} ${isQueued ? 'is-queued' : ''}`}>
+                <article key={item.id} className={`visual-card bezel-shell ${isReady ? 'is-ready' : ''} ${isQueued ? 'is-queued' : ''} ${isFailed ? 'is-failed' : ''}`}>
                   <div className="visual-card-header">
                     <span className="card-number-badge">#{index + 1}</span>
                     <strong className="card-kind-badge">{kindLabel(item.kind)}</strong>
-                    <span className={`status-pill ${isGenerating ? 'generating' : isQueued ? 'queued' : item.status}`}>
+                    <span className={`status-pill ${isGenerating ? 'generating' : isQueued ? 'queued' : isFailed ? 'failed' : item.status}`}>
                       {isGenerating ? (
                         <>
                           <ArrowClockwise size={12} className="spin-icon" />
@@ -949,13 +983,21 @@ export const VisualStudio = ({project, api, onProject, onNavigate}: Props) => {
                       />
                     </div>
 
-                    {item.error && <p className="card-error-text">⚠️ {item.error}</p>}
+                    {item.error && (
+                      <div className="card-error-callout" role="alert">
+                        <WarningCircle size={15} weight="bold" />
+                        <div>
+                          <strong>생성 실패</strong>
+                          <p>{item.error}</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="visual-card-footer">
                     <button
                       type="button"
-                      className={`generate-card-btn ${isReady ? 'is-regenerate' : isQueued ? 'is-queued' : isGenerating ? 'is-generating' : 'is-primary'}`}
+                      className={`generate-card-btn ${isReady ? 'is-regenerate' : isQueued ? 'is-queued' : isGenerating ? 'is-generating' : isFailed ? 'is-failed-retry' : 'is-primary'}`}
                       disabled={isGenerating || isQueued}
                       onClick={() => handleGenerateSingle(item)}
                     >
@@ -973,6 +1015,11 @@ export const VisualStudio = ({project, api, onProject, onNavigate}: Props) => {
                         <>
                           <ArrowClockwise size={15} />
                           피드백 반영 재생성
+                        </>
+                      ) : isFailed ? (
+                        <>
+                          <ArrowClockwise size={15} />
+                          다시 시도 (재생성)
                         </>
                       ) : (
                         <>
