@@ -1,5 +1,5 @@
 import {BookOpenText} from '@phosphor-icons/react';
-import {useEffect, useState} from 'react';
+import {useCallback, useEffect, useState} from 'react';
 import type {Project, ProjectStage} from '../shared/contracts';
 import {api as defaultApi, type YadamApi} from './api';
 import namdareunAiLogo from './assets/namdareun-ai-logo.svg';
@@ -25,7 +25,7 @@ export const App = ({api = defaultApi}: {api?: YadamApi}) => {
     if (creating || active) window.scrollTo({top: 0, behavior: 'smooth'});
   }, [creating, viewStage, active?.stage]);
 
-  const updateProject = (project: Project, forceStage?: ProjectStage) => {
+  const updateProject = useCallback((project: Project, forceStage?: ProjectStage) => {
     setActive(project);
     setCreating(false);
     setProjects((items) => [project, ...items.filter((item) => item.id !== project.id)]);
@@ -34,7 +34,7 @@ export const App = ({api = defaultApi}: {api?: YadamApi}) => {
     } else if (viewStage === null) {
       setViewStage(project.stage);
     }
-  };
+  }, [viewStage]);
 
   const handleOpenProject = async (project: Project) => {
     setActive(project);

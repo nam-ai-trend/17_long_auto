@@ -53,7 +53,7 @@ export type YadamApi = {
   startVisualBatch: (
     projectId: string,
     options?: {ids?: string[]},
-  ) => Promise<{queuedCount: number}>;
+  ) => Promise<{queuedCount: number; project?: Project}>;
   getVisualBatchStatus: (projectId: string) => Promise<{isBatchRunning: boolean}>;
   updateVisualBatchModels: (
     projectId: string,

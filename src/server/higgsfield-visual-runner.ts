@@ -280,7 +280,7 @@ export class HiggsfieldVisualRunner {
   public async startBatchGenerate(
     projectId: string,
     options: {ids?: string[]} = {},
-  ): Promise<{queuedCount: number}> {
+  ): Promise<{queuedCount: number; project?: Project}> {
     const repo = new ProjectRepository(this.database, this.assetRoot);
     const project = repo.get(projectId);
     if (!project) throw new Error('프로젝트를 찾을 수 없습니다.');
@@ -295,11 +295,22 @@ export class HiggsfieldVisualRunner {
     );
 
     if (ungenerated.length === 0) {
-      return {queuedCount: 0};
+      return {queuedCount: 0, project};
     }
 
+    // 대상 패키지들을 'queued' 상태로 즉시 마킹하여 사용자에게 큐 등록 피드백 전달
+    const ungeneratedIds = new Set(ungenerated.map((u) => u.id));
+    project.visualPromptPackages = project.visualPromptPackages.map((pkg) => {
+      if (ungeneratedIds.has(pkg.id) && pkg.status !== 'ready' && pkg.status !== 'generating') {
+        return {...pkg, status: 'queued' as const, error: null};
+      }
+      return pkg;
+    });
+    const savedProject = repo.save(project);
+    syncProjectOutputs(savedProject, this.assetRoot);
+
     if (this.activeBatchProjects.has(projectId)) {
-      return {queuedCount: ungenerated.length};
+      return {queuedCount: ungenerated.length, project: savedProject};
     }
 
     this.activeBatchProjects.add(projectId);
@@ -331,7 +342,7 @@ export class HiggsfieldVisualRunner {
       }
     })();
 
-    return {queuedCount: ungenerated.length};
+    return {queuedCount: ungenerated.length, project: savedProject};
   }
 
   public updateBatchModels(

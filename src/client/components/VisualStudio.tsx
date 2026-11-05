@@ -12,7 +12,7 @@ import {
   Sparkle,
   X,
 } from '@phosphor-icons/react';
-import {useEffect, useState} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import {
   RECOMMENDED_VISUAL_MODELS,
   type Project,
@@ -118,27 +118,64 @@ export const VisualStudio = ({project, api, onProject, onNavigate}: Props) => {
     (item) => !(item.status === 'ready' && item.assetUrl),
   );
 
-  // 일괄 생성 진행 시 폴링 감지
+  const onProjectRef = useRef(onProject);
+  onProjectRef.current = onProject;
+
+  const hasActiveWork =
+    isBatchRunning ||
+    project.visualPromptPackages.some((p) => p.status === 'generating' || p.status === 'queued');
+
+  // 마운트 시 현재 서버의 비주얼 배치 진행 상태 및 최신 프로젝트 자동 동기화
   useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (isBatchRunning) {
-      timer = setInterval(async () => {
-        try {
-          const [updatedProject, status] = await Promise.all([
-            api.getProject(project.id),
-            api.getVisualBatchStatus(project.id),
-          ]);
-          onProject(updatedProject);
-          if (!status.isBatchRunning) {
-            setIsBatchRunning(false);
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [latestProject, status] = await Promise.all([
+          api.getProject(project.id),
+          api.getVisualBatchStatus(project.id),
+        ]);
+        if (!cancelled) {
+          onProjectRef.current(latestProject);
+          if (status.isBatchRunning) {
+            setIsBatchRunning(true);
           }
-        } catch {
+        }
+      } catch {}
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [api, project.id]);
+
+  // 활성 생성 작업(배치 또는 개별 generating/queued)이 있을 때 2초 간격 실시간 자동 폴링
+  useEffect(() => {
+    if (!hasActiveWork) return;
+
+    let consecutiveErrors = 0;
+    const timer = setInterval(async () => {
+      try {
+        const [updatedProject, status] = await Promise.all([
+          api.getProject(project.id),
+          api.getVisualBatchStatus(project.id),
+        ]);
+        consecutiveErrors = 0;
+        onProjectRef.current(updatedProject);
+        const stillWorking =
+          status.isBatchRunning ||
+          updatedProject.visualPromptPackages.some((p) => p.status === 'generating' || p.status === 'queued');
+        if (!stillWorking) {
           setIsBatchRunning(false);
         }
-      }, 3500);
-    }
+      } catch {
+        consecutiveErrors++;
+        if (consecutiveErrors >= 5) {
+          setIsBatchRunning(false);
+        }
+      }
+    }, 2000);
+
     return () => clearInterval(timer);
-  }, [api, isBatchRunning, onProject, project.id]);
+  }, [api, hasActiveWork, project.id]);
 
   const addEntry = async () => {
     if (!name.trim()) return;
@@ -194,6 +231,9 @@ export const VisualStudio = ({project, api, onProject, onNavigate}: Props) => {
     try {
       const targetIds = scope === 'filtered' ? filteredPackages.map((p) => p.id) : undefined;
       const res = await api.startVisualBatch(project.id, {ids: targetIds});
+      if (res.project) {
+        onProject(res.project);
+      }
       if (res.queuedCount > 0) {
         setIsBatchRunning(true);
       }
@@ -206,6 +246,9 @@ export const VisualStudio = ({project, api, onProject, onNavigate}: Props) => {
     setActionError('');
     try {
       const res = await api.startVisualBatch(project.id, {ids});
+      if (res.project) {
+        onProject(res.project);
+      }
       if (res.queuedCount > 0) {
         setIsBatchRunning(true);
       }
@@ -793,18 +836,33 @@ export const VisualStudio = ({project, api, onProject, onNavigate}: Props) => {
 
           <div className="prompt-cards-container">
             {filteredPackages.map((item, index) => {
-              const isItemGenerating = generatingIds.has(item.id) || item.status === 'generating';
+              const isGenerating = generatingIds.has(item.id) || item.status === 'generating';
+              const isQueued = item.status === 'queued';
               const isReady = item.status === 'ready' && !!item.assetUrl;
+              const isFailed = item.status === 'failed';
               const currentModel = modelMap[item.id] || item.model || 'seedream_5_0_flash';
               const feedbackValue = feedbackMap[item.id] !== undefined ? feedbackMap[item.id] : (item.feedback ?? '');
 
               return (
-                <article key={item.id} className={`visual-card bezel-shell ${isReady ? 'is-ready' : ''}`}>
+                <article key={item.id} className={`visual-card bezel-shell ${isReady ? 'is-ready' : ''} ${isQueued ? 'is-queued' : ''}`}>
                   <div className="visual-card-header">
                     <span className="card-number-badge">#{index + 1}</span>
                     <strong className="card-kind-badge">{kindLabel(item.kind)}</strong>
-                    <span className={`status-pill ${item.status}`}>
-                      {isItemGenerating ? '생성 중...' : isReady ? '완료' : item.status === 'failed' ? '실패' : '대기'}
+                    <span className={`status-pill ${isGenerating ? 'generating' : isQueued ? 'queued' : item.status}`}>
+                      {isGenerating ? (
+                        <>
+                          <ArrowClockwise size={12} className="spin-icon" />
+                          생성 중...
+                        </>
+                      ) : isQueued ? (
+                        '대기 중 (큐)'
+                      ) : isReady ? (
+                        '완료'
+                      ) : isFailed ? (
+                        '실패'
+                      ) : (
+                        '미생성'
+                      )}
                     </span>
                   </div>
 
@@ -849,7 +907,7 @@ export const VisualStudio = ({project, api, onProject, onNavigate}: Props) => {
                       <select
                         id={`model-${item.id}`}
                         value={currentModel}
-                        disabled={isItemGenerating}
+                        disabled={isGenerating || isQueued}
                         onChange={(e) => {
                           const newModel = e.target.value;
                           setModelMap((prev) => ({...prev, [item.id]: newModel}));
@@ -886,7 +944,7 @@ export const VisualStudio = ({project, api, onProject, onNavigate}: Props) => {
                         id={`feedback-${item.id}`}
                         placeholder="예: 인물 표정을 더 비장하게, 배경에 눈보라 추가"
                         value={feedbackValue}
-                        disabled={isItemGenerating}
+                        disabled={isGenerating || isQueued}
                         onChange={(e) => setFeedbackMap({...feedbackMap, [item.id]: e.target.value})}
                       />
                     </div>
@@ -897,14 +955,19 @@ export const VisualStudio = ({project, api, onProject, onNavigate}: Props) => {
                   <div className="visual-card-footer">
                     <button
                       type="button"
-                      className={`generate-card-btn ${isReady ? 'is-regenerate' : 'is-primary'}`}
-                      disabled={isItemGenerating}
+                      className={`generate-card-btn ${isReady ? 'is-regenerate' : isQueued ? 'is-queued' : isGenerating ? 'is-generating' : 'is-primary'}`}
+                      disabled={isGenerating || isQueued}
                       onClick={() => handleGenerateSingle(item)}
                     >
-                      {isItemGenerating ? (
+                      {isGenerating ? (
                         <>
                           <ArrowClockwise size={15} className="spin-icon" />
-                          생성 중...
+                          AI 생성 중...
+                        </>
+                      ) : isQueued ? (
+                        <>
+                          <ArrowClockwise size={15} />
+                          생성 대기 중...
                         </>
                       ) : isReady ? (
                         <>
@@ -932,18 +995,29 @@ export const VisualStudio = ({project, api, onProject, onNavigate}: Props) => {
         </div>
       </section>
 
-      {/* 미디어 확대 모달 */}
+      {/* 미디어 확대 모달 (비율 유지 & 원본 전체 노출) */}
       {previewMedia && (
         <div className="media-modal-backdrop" onClick={() => setPreviewMedia(null)}>
           <div className="media-modal-content" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              className="modal-close-btn"
-              onClick={() => setPreviewMedia(null)}
-              aria-label="닫기"
-            >
-              <X size={20} />
-            </button>
+            <div className="modal-header-actions">
+              <a
+                href={previewMedia.url}
+                target="_blank"
+                rel="noreferrer"
+                className="modal-action-btn"
+                title="새 탭에서 원본 고해상도 이미지 보기"
+              >
+                원본 크기 보기 ↗
+              </a>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setPreviewMedia(null)}
+                aria-label="닫기"
+              >
+                <X size={20} />
+              </button>
+            </div>
             {previewMedia.isVideo ? (
               <video src={previewMedia.url} controls autoPlay loop className="modal-media-elem" />
             ) : (
