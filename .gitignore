@@ -48,6 +48,7 @@ CONTEXT.md
 plan.md
 AGENTS.md
 GEMINI.md
+NEXT_SESSION.md
 .agents/
 skills-lock.json
 pinokio_agent/
