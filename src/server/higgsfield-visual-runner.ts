@@ -498,14 +498,25 @@ export class HiggsfieldVisualRunner {
 
     let modified = false;
 
-    const normalize = (text: string) =>
-      text
+    const extractActionAndScene = (text: string) => {
+      const clean = text
         .toLowerCase()
         .replace(/김수현/g, '수현')
         .replace(/kim\s*soo-?hyun/g, 'su-hyeon')
         .replace(/[^\w\s가-힣]/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
+
+      const actionMatch = clean.match(/action\s+([a-z가-힣0-9\s]{5,60})/);
+      const sceneMatch = clean.match(/scene\s+([a-z가-힣0-9\s]{5,60})/);
+      const refMatch = clean.match(/(character|location|canonical prop)\s+reference\s+(sheet\s+for\s+)?([a-z가-힣0-9\s]{2,30})/);
+
+      return {
+        action: actionMatch ? actionMatch[1].trim() : '',
+        scene: sceneMatch ? sceneMatch[1].trim() : '',
+        ref: refMatch ? refMatch[3].trim() : '',
+      };
+    };
 
     for (let i = 0; i < project.visualPromptPackages.length; i++) {
       const pkg = project.visualPromptPackages[i];
@@ -518,14 +529,31 @@ export class HiggsfieldVisualRunner {
         continue;
       }
 
-      const pkgNorm = normalize(pkg.prompt);
-      const pkgSnippet = pkgNorm.slice(0, 80);
+      const pkgInfo = extractActionAndScene(pkg.prompt);
 
-      // 원격 작업 중 프롬프트가 매칭되는 최근 작업 탐색
+      // 원격 작업 중 미디어 종류와 고유 액션/레퍼런스가 일치하는 최근 작업 탐색
       const matchingJob = remoteJobs.find((job) => {
-        const jobNorm = normalize(job.params?.prompt || '');
-        if (!jobNorm) return false;
-        return jobNorm.includes(pkgSnippet) || pkgNorm.includes(jobNorm.slice(0, 80));
+        const isJobVideo =
+          VIDEO_MODELS.has(job.job_type) ||
+          job.params?.mode === 'fast' ||
+          Boolean(job.result_url?.endsWith('.mp4'));
+
+        // 비디오/이미지 종류가 다르면 절대 매칭 금지
+        if (isVideo !== isJobVideo) return false;
+
+        const jobInfo = extractActionAndScene(job.params?.prompt || '');
+
+        if (pkgInfo.ref && jobInfo.ref) {
+          return pkgInfo.ref === jobInfo.ref || jobInfo.ref.includes(pkgInfo.ref);
+        }
+
+        if (pkgInfo.action && jobInfo.action) {
+          const pSub = pkgInfo.action.slice(0, 20);
+          const jSub = jobInfo.action.slice(0, 20);
+          return pkgInfo.action === jobInfo.action || pkgInfo.action.includes(jSub) || jobInfo.action.includes(pSub);
+        }
+
+        return false;
       });
 
       if (matchingJob) {
@@ -542,6 +570,13 @@ export class HiggsfieldVisualRunner {
           } catch (dlErr) {
             console.error(`[VisualRunner] 원격 미디어 다운로드 실패 (${pkg.id}):`, dlErr);
           }
+        } else if (matchingJob.status === 'ip_detected') {
+          project.visualPromptPackages[i] = {
+            ...pkg,
+            status: 'failed',
+            error: '저작권 제한 (초상권/공인 보호): 실존 인물명이 감지되어 AI 서버에서 생성이 거부되었습니다. [다시 시도]를 눌러주세요.',
+          };
+          modified = true;
         } else if (matchingJob.status === 'failed' || matchingJob.status === 'rejected') {
           project.visualPromptPackages[i] = {
             ...pkg,
