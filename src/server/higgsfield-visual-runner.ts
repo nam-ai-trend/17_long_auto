@@ -255,10 +255,47 @@ export class HiggsfieldVisualRunner {
         }
       }
 
-      // 캐릭터 일관성을 위해 캐릭터 시트를 최우선으로 정렬 (최대 3개 참조)
+      // 인물·장소·오브제 기준팩이 고르게 주입되도록 균형 정렬 (인물 1 + 장소 1 + 오브제 1 최우선 보장)
       const charRefs = referenceImagePaths.filter((p) => p.includes('character-'));
-      const nonCharRefs = referenceImagePaths.filter((p) => !p.includes('character-'));
-      const prioritizedRefs = [...charRefs, ...nonCharRefs].slice(0, 3);
+      const locationRefs = referenceImagePaths.filter((p) => p.includes('location-'));
+      const objectRefs = referenceImagePaths.filter((p) => p.includes('object-'));
+      const otherRefs = referenceImagePaths.filter(
+        (p) => !p.includes('character-') && !p.includes('location-') && !p.includes('object-'),
+      );
+
+      const prioritizedRefs = [
+        ...charRefs.slice(0, 1),
+        ...locationRefs.slice(0, 1),
+        ...objectRefs.slice(0, 1),
+        ...charRefs.slice(1, 2),
+        ...locationRefs.slice(1, 2),
+        ...objectRefs.slice(1, 2),
+        ...otherRefs,
+      ].slice(0, 3);
+
+      // 같은 씬(동일 장소) 내 연속되는 키프레임/삽화인 경우, 직전 컷의 완료된 이미지를 연속성 앵커로 보조 주입 (슬롯 여유 시)
+      if (!isVideo && !isReferenceSheet && prioritizedRefs.length < 3 && targetPkg.sceneDataId) {
+        const sameSceneImagePkgs = latestProj.visualPromptPackages.filter(
+          (p) =>
+            p.kind === targetPkg.kind &&
+            p.sceneDataId === targetPkg.sceneDataId,
+        );
+        const myIdxInScene = sameSceneImagePkgs.findIndex((p) => p.id === targetPkg.id);
+        if (myIdxInScene > 0) {
+          const prevPkg = sameSceneImagePkgs[myIdxInScene - 1];
+          const prevFilePath = join(visualDir, `${prevPkg.id}.png`);
+          if (existsSync(prevFilePath) && !prioritizedRefs.includes(prevFilePath)) {
+            prioritizedRefs.push(prevFilePath);
+          }
+        }
+      }
+
+      // 비디오 생성 시에도 인물 + 장소 + 오브제 기준팩을 함께 전달하여 60초 도입부의 배경·소품·인물 일관성 유지
+      const videoRefs = [
+        ...charRefs.slice(0, 1),
+        ...locationRefs.slice(0, 1),
+        ...objectRefs.slice(0, 1),
+      ].slice(0, 3);
 
       // 실제 CLI에 전달할 모델 식별자 (seedance_2_0_fast는 seedance_2_0 모델의 fast 모드)
       const actualModel = selectedModel === 'seedance_2_0_fast' ? 'seedance_2_0' : selectedModel;
@@ -270,12 +307,12 @@ export class HiggsfieldVisualRunner {
         cliArgs.push('--aspect_ratio', '16:9');
 
         if (selectedModel === 'seedance_2_0_fast') {
-          // Seedance 2.0 Fast: 720p 고속/경제적 모션 + 캐릭터 일관성 유지
+          // Seedance 2.0 Fast: 720p 고속/경제적 모션 + 캐릭터·장소·오브제 일관성 유지
           cliArgs.push('--mode', 'fast', '--resolution', '720p');
           if (startImagePath) {
             cliArgs.push('--start-image', startImagePath);
           }
-          for (const refImg of charRefs.slice(0, 2)) {
+          for (const refImg of videoRefs) {
             cliArgs.push('--image', refImg);
           }
         } else if (selectedModel === 'seedance_2_0_mini') {
@@ -284,7 +321,7 @@ export class HiggsfieldVisualRunner {
           if (startImagePath) {
             cliArgs.push('--start-image', startImagePath);
           }
-          for (const refImg of charRefs.slice(0, 2)) {
+          for (const refImg of videoRefs) {
             cliArgs.push('--image', refImg);
           }
         } else if (selectedModel === 'seedance_2_5') {
@@ -292,7 +329,7 @@ export class HiggsfieldVisualRunner {
           if (startImagePath) {
             cliArgs.push('--start-image', startImagePath);
             cliArgs.push('--mode', 'omni_reference');
-            for (const refImg of charRefs.slice(0, 2)) {
+            for (const refImg of videoRefs) {
               cliArgs.push('--image', refImg);
             }
           } else if (referenceImagePaths.length > 0) {
@@ -306,13 +343,13 @@ export class HiggsfieldVisualRunner {
           if (startImagePath) {
             cliArgs.push('--start-image', startImagePath);
           }
-          for (const refImg of charRefs.slice(0, 2)) {
+          for (const refImg of videoRefs) {
             cliArgs.push('--image', refImg);
           }
         }
       } else {
         cliArgs.push('--aspect_ratio', targetPkg.aspectRatio || '16:9');
-        // 키프레임 및 씬 삽화 생성 시 캐릭터 레퍼런스 이미지 자동 주입
+        // 키프레임 및 씬 삽화 생성 시 인물·장소·오브제 레퍼런스 이미지 자동 주입
         for (const refImg of prioritizedRefs) {
           cliArgs.push('--image', refImg);
         }
@@ -553,8 +590,8 @@ export class HiggsfieldVisualRunner {
     const extractActionAndScene = (text: string) => {
       const clean = text
         .toLowerCase()
-        .replace(/김수현/g, '수현')
-        .replace(/kim\s*soo-?hyun/g, 'su-hyeon')
+        .replace(/김수현|도윤/g, '수현')
+        .replace(/kim\s*soo-?hyun|do-?yun/g, 'su-hyeon')
         .replace(/[^\w\s가-힣]/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
@@ -658,7 +695,7 @@ export class HiggsfieldVisualRunner {
   }
 
   /**
-   * Higgsfield CLI 실행 및 일시적 원격 렌더링 실패(failed)에 대비한 지수 백오프 자동 재시도
+   * Higgsfield CLI 실행 및 일시적 원격 렌더링 실패(failed / ip_detected)에 대비한 지수 백오프 자동 재시도
    */
   private async runCliWithRetry(
     args: string[],
@@ -667,16 +704,39 @@ export class HiggsfieldVisualRunner {
     delayMs = 4000,
   ): Promise<string> {
     let lastError: unknown;
+    let currentArgs = [...args];
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        return await this.runCli(args);
+        return await this.runCli(currentArgs);
       } catch (caught) {
         lastError = caught;
         const msg = caught instanceof Error ? caught.message : String(caught);
         console.warn(
           `[VisualRunner] ${targetId} 생성 시도 ${attempt}/${maxRetries} 실패: ${msg.trim()}`,
         );
+
+        // ip_detected 발생 시: --start-image가 이미 있는 비디오 작업이라면 중복 얼굴 검열을 유발하는 캐릭터 --image를 우선 제거하고, 재발 시 전체 --image 제거
+        if (msg.includes('ip_detected') && currentArgs.includes('--start-image') && currentArgs.includes('--image')) {
+          const hasCharRef = currentArgs.some(
+            (arg, idx) => idx > 0 && currentArgs[idx - 1] === '--image' && arg.includes('character-'),
+          );
+          const strippedArgs: string[] = [];
+          for (let i = 0; i < currentArgs.length; i++) {
+            if (currentArgs[i] === '--image') {
+              const nextPath = currentArgs[i + 1] ?? '';
+              if (!hasCharRef || nextPath.includes('character-')) {
+                i++; // 해당 --image와 파일 경로 인자 건너뛰기
+                continue;
+              }
+            }
+            strippedArgs.push(currentArgs[i]);
+          }
+          currentArgs = strippedArgs;
+          console.log(
+            `[VisualRunner] ${targetId}: ip_detected 감지로 인해 ${hasCharRef ? '캐릭터 시트 --image만 제외하고 장소·오브제 기준팩을 유지한 채' : '--start-image 키프레임만 유지하고 추가 --image를 제외하여'} 재시도합니다.`,
+          );
+        }
 
         if (attempt < maxRetries) {
           // 일시적 클라우드 GPU 타임아웃/부하를 고려해 대기 후 재시도

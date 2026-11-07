@@ -1,4 +1,4 @@
-import {mkdirSync, writeFileSync} from 'node:fs';
+import {mkdirSync, readdirSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import type {Project, StoryCandidate, StoryScene} from '../shared/contracts';
 
@@ -18,7 +18,8 @@ export const syncProjectOutputs = (project: Project, assetRoot?: string): void =
       .slice(0, 45) || project.id.slice(0, 8);
   const projectSpecificOutputsDir = join(rootOutputsDir, safeProjectName);
 
-  const targetDirs = [rootOutputsDir, projectSpecificOutputsDir];
+  // outputs 루트에 파일들을 흩뿌리지 않고, 오직 'outputs/<주제별_프로젝트명>/' 하위 폴더에만 정리
+  const targetDirs = [projectSpecificOutputsDir];
   if (assetRoot) {
     targetDirs.push(join(assetRoot, project.id, 'outputs'));
   }
@@ -302,4 +303,36 @@ export const syncProjectOutputs = (project: Project, assetRoot?: string): void =
     `- \`07_visual_prompts.json\`: 자동화용 비주얼 프롬프트 JSON 데이터`,
   ];
   writeToTargets('summary.md', summaryLines.join('\n'));
+
+  // outputs 루트에 전체 주제별 작품 목록을 안내하는 색인(INDEX.md)을 자동 갱신
+  try {
+    updateRootIndex(rootOutputsDir);
+  } catch {}
+};
+
+const updateRootIndex = (rootOutputsDir: string): void => {
+  const entries = readdirSync(rootOutputsDir, {withFileTypes: true});
+  const projectDirs = entries
+    .filter((e) => e.isDirectory() && !e.name.startsWith('.') && !e.name.startsWith('_'))
+    .map((e) => e.name)
+    .sort();
+
+  const lines: string[] = [
+    '# 📚 야담 롱폼 자동 제작 산출물 보관소 (Outputs)',
+    '',
+    '이 디렉토리는 작품(주제)별로 생성된 대본, 기획안, 큐 타임라인, 비주얼 프롬프트 산출물을 모아두는 곳입니다.',
+    '',
+    '## 🗂️ 주제별 프로젝트 폴더 목록',
+    '',
+    '| 번호 | 작품 주제 폴더명 | 산출물 바로가기 |',
+    '| :--- | :--- | :--- |',
+  ];
+
+  projectDirs.forEach((dirName: string, idx: number) => {
+    lines.push(`| ${idx + 1} | \`${dirName}\` | [폴더 열기](./${encodeURIComponent(dirName)}/summary.md) |`);
+  });
+
+  lines.push('', '> 산출물 파일은 각 주제별 하위 폴더(`outputs/<주제명>/`) 안에 마크다운과 텍스트로 보관됩니다.');
+
+  writeFileSync(join(rootOutputsDir, 'INDEX.md'), lines.join('\n'), 'utf8');
 };

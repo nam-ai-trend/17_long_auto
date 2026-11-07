@@ -474,9 +474,22 @@ export const VisualStudio = ({project, api, onProject, onNavigate}: Props) => {
               })}
             </div>
             <div className="bible-list">
-              {project.visualBible.filter((entry) => entry.kind === activeKind).map((entry) => (
-                <article key={entry.id}><span className="asset-avatar">{entry.name.slice(0, 1)}</span><div><strong>{entry.name}</strong><small>{entry.description}</small></div><span className="status-dot">초안</span></article>
-              ))}
+              {project.visualBible.filter((entry) => entry.kind === activeKind).map((entry) => {
+                const refPkg = project.visualPromptPackages.find((p) => p.sourceId === entry.id);
+                const isRefReady = (refPkg?.status === 'ready' && !!refPkg.assetUrl) || entry.status === 'ready';
+                return (
+                  <article key={entry.id}>
+                    <span className="asset-avatar">{entry.name.slice(0, 1)}</span>
+                    <div>
+                      <strong>{entry.name}</strong>
+                      <small>{entry.description}</small>
+                    </div>
+                    <span className={`status-dot ${isRefReady ? 'is-ready' : ''}`}>
+                      {isRefReady ? '완료' : '초안'}
+                    </span>
+                  </article>
+                );
+              })}
               {project.visualBible.filter((entry) => entry.kind === activeKind).length === 0 && <p className="inline-empty">아직 기준팩이 없습니다. 대본에서 자동 추출하거나 직접 추가하세요.</p>}
             </div>
             <div className="inline-add">
@@ -878,11 +891,34 @@ export const VisualStudio = ({project, api, onProject, onNavigate}: Props) => {
               const currentModel = modelMap[item.id] || item.model || 'seedream_5_0_flash';
               const feedbackValue = feedbackMap[item.id] !== undefined ? feedbackMap[item.id] : (item.feedback ?? '');
 
+              const refEntry = item.kind.endsWith('reference')
+                ? project.visualBible.find((b) => b.id === item.sourceId)
+                : undefined;
+              const matchedSegment = item.mediaSegmentId
+                ? project.mediaSegments.find((s) => s.id === item.mediaSegmentId)
+                : undefined;
+              const matchedCueText = matchedSegment
+                ? project.cues
+                    .filter((c) => c.end > matchedSegment.start + 0.1 && c.start < matchedSegment.end - 0.1)
+                    .map((c) => c.text.trim())
+                    .join(' ') ||
+                  project.cues.find((c) => Math.abs(c.start - matchedSegment.start) < 0.35)?.text.trim()
+                : undefined;
+              const linkedRefs = (item.referenceKeys ?? [])
+                .map((refKey) => project.visualBible.find((b) => b.id === refKey))
+                .filter((b): b is VisualBibleEntry => Boolean(b));
+              const readablePromptSnippet = item.prompt
+                .replace(/^mature semi-realistic Joseon-era[^.]*\.\s*/i, '')
+                .slice(0, 150);
+
               return (
                 <article key={item.id} className={`visual-card bezel-shell ${isReady ? 'is-ready' : ''} ${isQueued ? 'is-queued' : ''} ${isFailed ? 'is-failed' : ''}`}>
                   <div className="visual-card-header">
                     <span className="card-number-badge">#{index + 1}</span>
-                    <strong className="card-kind-badge">{kindLabel(item.kind)}</strong>
+                    <strong className="card-kind-badge">
+                      {kindLabel(item.kind)}
+                      {refEntry ? ` · ${refEntry.name}` : matchedSegment ? ` (${matchedSegment.start.toFixed(1)}–${matchedSegment.end.toFixed(1)}초)` : ''}
+                    </strong>
                     <span className={`status-pill ${isGenerating ? 'generating' : isQueued ? 'queued' : isFailed ? 'failed' : item.status}`}>
                       {isGenerating ? (
                         <>
@@ -930,8 +966,29 @@ export const VisualStudio = ({project, api, onProject, onNavigate}: Props) => {
                   )}
 
                   <div className="visual-card-body">
+                    {matchedCueText && (
+                      <div className="card-cue-callout">
+                        <span className="cue-badge">대본</span>
+                        <span>{matchedCueText}</span>
+                      </div>
+                    )}
+                    {refEntry && (
+                      <div className="card-cue-callout is-reference">
+                        <span className="cue-badge">기준</span>
+                        <span>{refEntry.description}</span>
+                      </div>
+                    )}
+                    {!item.kind.endsWith('reference') && linkedRefs.length > 0 && (
+                      <div className="card-ref-badges" aria-label="적용된 기준팩">
+                        {linkedRefs.map((ref) => (
+                          <span key={ref.id} className={`ref-chip is-${ref.kind}`}>
+                            {ref.kind === 'character' ? '👤' : ref.kind === 'location' ? '🏞️' : '📦'} {ref.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     <p className="card-prompt-snippet" title={item.prompt}>
-                      {item.prompt.slice(0, 120)}...
+                      {readablePromptSnippet}...
                     </p>
 
                     {/* 모델 선택 드롭다운 (이미지/영상 분리) */}
